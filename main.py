@@ -5,6 +5,7 @@ from sqlalchemy import text
 from app.database import engine, Base
 from app.config import settings
 from app.routers import articles, push
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
@@ -25,7 +26,7 @@ app.add_middleware(
 app.include_router(articles.router)
 app.include_router(push.router)
 
-@app.get("/")
+@app.get)("/")
 async def root():
     return {"status": "ok", "service": "Archery News API"}
 
