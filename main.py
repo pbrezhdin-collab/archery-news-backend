@@ -26,7 +26,7 @@ app.add_middleware(
 app.include_router(articles.router)
 app.include_router(push.router)
 
-@app.get)("/")
+@app.get("/")
 async def root():
     return {"status": "ok", "service": "Archery News API"}
 
