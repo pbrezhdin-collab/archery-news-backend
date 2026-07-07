@@ -8,7 +8,6 @@ from app.routers import articles, push
 
 <span style="color: hsl(var(--primary)); font-weight: 500;">@asynccontextmanager</span>
 async def lifespan(app: FastAPI):
-    # при старте: включаем pgvector и создаём таблицы
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
@@ -18,7 +17,11 @@ app = FastAPI(title="Archery News API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_ORIGIN, "http://localhost:5173", "http://localhost:4173"],
+    allow_origins=[
+        settings.FRONTEND_ORIGIN,
+        "http://localhost:5173",
+        "http://localhost:4173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
