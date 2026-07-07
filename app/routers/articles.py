@@ -7,7 +7,7 @@ from app.schemas import ArticleOut
 
 router = APIRouter(prefix="/api/articles", tags=["articles"])
 
-[router.get](workspace://router.get)("", response_model=list[ArticleOut])
+@router.get("", response_model=list[ArticleOut])
 async def get_articles(
     category: str | None = Query(None),
     search: str | None = Query(None),
@@ -29,7 +29,7 @@ async def get_articles(
     result = await db.execute(query)
     return result.scalars().all()
 
-[router.get](workspace://router.get)("/{article_id}", response_model=ArticleOut)
+@router.get("/{article_id}", response_model=ArticleOut)
 async def get_article(article_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Article).where(Article.id == article_id))
     article = result.scalar_one_or_none()
