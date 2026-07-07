@@ -7,7 +7,7 @@ from app.schemas import PushSubscriptionIn
 
 router = APIRouter(prefix="/api/push", tags=["push"])
 
-[router.post](workspace://router.post)("/subscribe")
+@router.post("/subscribe")
 async def subscribe(sub: PushSubscriptionIn, db: AsyncSession = Depends(get_db)):
     exists = await db.execute(
         select(PushSubscription).where(PushSubscription.endpoint == sub.endpoint)
