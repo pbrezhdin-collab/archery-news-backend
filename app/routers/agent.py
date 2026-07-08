@@ -22,9 +22,11 @@ _DEDUPE_SQL = text(r"""
       SELECT id,
         regexp_replace(
           regexp_replace(
-            regexp_replace(split_part(source_url, '?', 1), '^https?://', ''),
-          '^www\.', ''),
-        '/+$', '') AS norm_url
+            regexp_replace(
+              regexp_replace(split_part(source_url, '?', 1), '^https?://', ''),
+            '^www\.', ''),
+          '/+$', ''),
+        '^([^/]+)/en/', '\1/') AS norm_url
       FROM articles
     )
     DELETE FROM articles a
