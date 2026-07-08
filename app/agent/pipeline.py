@@ -16,7 +16,7 @@ async def _article_exists(session: AsyncSession, source_url: str) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-async def process_feed(session: AsyncSession, source_name: str, feed_url: str) -> dict:
+async def process_feed(session: AsyncSession, source_name: str, feed_url: str, source_language: str = "en") -> dict:
     """Собирает, переводит и сохраняет новости с одной RSS-ленты."""
     items = await fetch_feed(feed_url)
     stats = {"total": len(items), "skipped": 0, "saved": 0, "errors": 0}
@@ -40,6 +40,7 @@ async def process_feed(session: AsyncSession, source_name: str, feed_url: str) -
                 item.get("title_original", ""),
                 item.get("content", ""),
                 content,
+                fallback_language=source_language,
             )
 
             # Колонка published_at в БД — TIMESTAMP WITHOUT TIME ZONE (наивная).
@@ -63,7 +64,7 @@ async def process_feed(session: AsyncSession, source_name: str, feed_url: str) -
                 source_url=source_url,
                 image_url=image_url,
                 published_at=pub_at,
-                language="en",
+                language=result["source_language"],
             )
             session.add(article)
             await session.commit()
@@ -87,7 +88,7 @@ async def run_agent(session: AsyncSession) -> dict:
     for src in sources:
         if src.type != "rss":
             continue  # api / scrape — добавим позже (см. v1.1 в ТЗ)
-        stats = await process_feed(session, src.name, src.url)
+        stats = await process_feed(session, src.name, src.url, source_language=src.language)
         for key in totals:
             totals[key] += stats[key]
     return totals

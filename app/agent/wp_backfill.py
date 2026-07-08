@@ -1,6 +1,7 @@
 import re
 import httpx
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +31,7 @@ async def _article_exists(session: AsyncSession, source_url: str) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-async def _fetch_wp_page(site_base: str, page: int, after_iso: str, before_iso: str | None) -> list[dict]:
+async def _fetch_wp_page(site_base: str, page: int, after_iso: str, before_iso: str | None, lang: str | None) -> list[dict]:
     params = {
         "per_page": 100,
         "page": page,
@@ -41,6 +42,8 @@ async def _fetch_wp_page(site_base: str, page: int, after_iso: str, before_iso: 
     }
     if before_iso:
         params["before"] = before_iso
+    if lang:
+        params["lang"] = lang  # поддерживается большинством сайтов на WPML/Polylang
 
     url = f"{site_base.rstrip('/')}/wp-json/wp/v2/posts"
     async with httpx.AsyncClient(timeout=30) as client:
@@ -68,18 +71,41 @@ def _extract_image(post: dict) -> str:
     return ""
 
 
+def _is_expected_language(post: dict, lang: str, url_prefix: str | None) -> bool:
+    """
+    Проверяет, что пост действительно на нужном языке — важно для мультиязычных
+    сайтов (Polylang/WPML), где одна и та же новость существует как отдельный
+    пост на каждом языке. Одного query-параметра ?lang= может быть недостаточно,
+    если сайт его не поддерживает — поэтому по возможности подстраховываемся
+    ещё и по префиксу пути (например "/en/"), если он передан явно.
+    """
+    if url_prefix:
+        link = post.get("link", "")
+        path = urlsplit(link).path
+        segments = [s for s in path.split("/") if s]
+        return len(segments) > 0 and segments[0] == url_prefix
+    return True  # доверяем серверному ?lang= фильтру, если префикс пути не задан
+
+
 async def backfill_from_wordpress(
     session: AsyncSession,
     source_name: str,
     site_base: str,
     since: datetime,
     until: datetime | None = None,
+    lang: str = "en",
+    url_lang_prefix: str | None = "en",
     max_pages: int = 20,  # защита от бесконечного цикла (20 страниц * 100 = до 2000 постов)
 ) -> dict:
     """
     Собирает исторические новости с WordPress-сайта через встроенный REST API.
     В отличие от RSS (только последние ~10 записей) отдаёт сколько угодно старых
     постов постранично, и сразу с картинкой через _embed — без отдельного скрейпинга.
+
+    lang — код языка, который просим у сайта через ?lang= (напр. "en", "es", "fr").
+    url_lang_prefix — доп. проверка по пути ссылки (напр. "en" для /en/slug).
+    Если у целевого языка в URL нет префикса (это язык по умолчанию на сайте) —
+    передай url_lang_prefix=None, тогда фильтрация идёт только через ?lang=.
     """
     after_iso = since.astimezone(timezone.utc).isoformat()
     before_iso = until.astimezone(timezone.utc).isoformat() if until else None
@@ -88,7 +114,7 @@ async def backfill_from_wordpress(
     page = 1
     while page <= max_pages:
         try:
-            posts = await _fetch_wp_page(site_base, page, after_iso, before_iso)
+            posts = await _fetch_wp_page(site_base, page, after_iso, before_iso, lang)
         except Exception as e:
             print(f"[wp-backfill] Ошибка загрузки страницы {page}: {e}")
             break
@@ -100,6 +126,11 @@ async def backfill_from_wordpress(
 
         for post in posts:
             stats["total"] += 1
+
+            if not _is_expected_language(post, lang, url_lang_prefix):
+                stats["skipped"] += 1
+                continue
+
             source_url = normalize_url(post.get("link", ""))
             if not source_url:
                 stats["errors"] += 1
@@ -120,7 +151,7 @@ async def backfill_from_wordpress(
                 else:
                     published_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
-                result = translate_and_summarize(title, excerpt, content)
+                result = translate_and_summarize(title, excerpt, content, fallback_language=lang)
 
                 article = Article(
                     title=result["title_ru"] or title,
@@ -133,7 +164,7 @@ async def backfill_from_wordpress(
                     source_url=source_url,
                     image_url=image_url,
                     published_at=published_at,
-                    language="en",
+                    language=result["source_language"],
                 )
                 session.add(article)
                 await session.commit()
