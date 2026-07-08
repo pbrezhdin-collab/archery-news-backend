@@ -10,7 +10,8 @@ class Article(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(500))                 # заголовок (RU)
     title_original: Mapped[str] = mapped_column(String(500))        # оригинал (EN)
-    summary: Mapped[str] = mapped_column(Text)                      # краткое саммари (RU)
+    summary: Mapped[str] = mapped_column(Text)                      # краткое саммари (RU) — для карточки
+    summary_detailed: Mapped[str] = mapped_column(Text, default="")  # развёрнутое саммари (RU) — для модалки
     content: Mapped[str] = mapped_column(Text, default="")          # полный текст (RU)
     category: Mapped[str] = mapped_column(String(50), index=True)   # категория
     source: Mapped[str] = mapped_column(String(100))               # источник

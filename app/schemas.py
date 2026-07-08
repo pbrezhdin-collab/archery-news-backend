@@ -28,6 +28,7 @@ class ArticleOut(BaseModel):
     title_ru: str = Field(validation_alias="title")
     title_orig: str = Field(validation_alias="title_original")
     summary_ru: str = Field(validation_alias="summary")
+    summary_detailed_ru: str = Field(validation_alias="summary_detailed")
     source_name: str = Field(validation_alias="source")
     source_url: str
     image_url: str
