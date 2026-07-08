@@ -20,4 +20,13 @@ def normalize_url(url: str) -> str:
     if netloc.startswith("www."):
         netloc = netloc[4:]
     path = parts.path.rstrip("/")
+
+    # Сайт мультиязычный: одна и та же статья доступна и как /en/slug,
+    # и как /slug (без префикса языка) — без этого разные URL считались
+    # разными статьями и сохранялись по два раза.
+    segments = path.split("/")
+    if len(segments) > 1 and segments[1] == "en":
+        del segments[1]
+        path = "/".join(segments)
+
     return urlunsplit(("https", netloc, path, "", ""))
