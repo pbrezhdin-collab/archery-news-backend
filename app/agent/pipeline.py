@@ -41,6 +41,13 @@ async def process_feed(session: AsyncSession, source_name: str, feed_url: str) -
                 content,
             )
 
+            # Колонка published_at в БД — TIMESTAMP WITHOUT TIME ZONE (наивная).
+            # RSS-парсер отдаёт дату с tzinfo=utc — приводим к наивному UTC,
+            # иначе asyncpg падает с "can't subtract offset-naive and offset-aware datetimes".
+            pub_at = item.get("published_at") or datetime.now(timezone.utc)
+            if pub_at.tzinfo is not None:
+                pub_at = pub_at.astimezone(timezone.utc).replace(tzinfo=None)
+
             article = Article(
                 title=result["title_ru"] or item.get("title_original", ""),
                 title_original=item.get("title_original", ""),
@@ -50,7 +57,7 @@ async def process_feed(session: AsyncSession, source_name: str, feed_url: str) -
                 source=source_name,
                 source_url=source_url,
                 image_url=item.get("image_url", "") or "",
-                published_at=item.get("published_at") or datetime.now(timezone.utc),
+                published_at=pub_at,
                 language="en",
             )
             session.add(article)
