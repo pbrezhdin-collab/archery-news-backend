@@ -57,3 +57,10 @@ class AgentRunResult(BaseModel):
     saved: int
     skipped: int
     errors: int
+
+
+class BackfillRequest(BaseModel):
+    site_base: str          # напр. "https://www.worldarcheryamericas.com"
+    source_name: str        # напр. "World Archery Americas"
+    since: str               # "2026-01-01"
+    until: str | None = None  # необязательно, по умолчанию — до сегодня
