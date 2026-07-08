@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.collector import fetch_feed
-from app.agent.scraper import fetch_article_text
+from app.agent.scraper import fetch_article_text_and_image
 from app.agent.llm import translate_and_summarize
 from app.models import Article, Source
 
@@ -34,7 +34,7 @@ async def process_feed(session: AsyncSession, source_name: str, feed_url: str) -
             continue
 
         try:
-            content = fetch_article_text(source_url)
+            content, scraped_image = fetch_article_text_and_image(source_url)
             result = translate_and_summarize(
                 item.get("title_original", ""),
                 item.get("content", ""),
@@ -48,15 +48,19 @@ async def process_feed(session: AsyncSession, source_name: str, feed_url: str) -
             if pub_at.tzinfo is not None:
                 pub_at = pub_at.astimezone(timezone.utc).replace(tzinfo=None)
 
+            # Картинка: сначала пробуем из RSS, если там пусто — берём og:image со страницы источника.
+            image_url = item.get("image_url", "") or scraped_image or ""
+
             article = Article(
                 title=result["title_ru"] or item.get("title_original", ""),
                 title_original=item.get("title_original", ""),
                 summary=result["summary_ru"],
-                content=result["content_ru"],
+                summary_detailed=result["summary_detailed_ru"],
+                content="",  # больше не используется напрямую (не отдаётся через API, см. schemas.py)
                 category=result["category"],
                 source=source_name,
                 source_url=source_url,
-                image_url=item.get("image_url", "") or "",
+                image_url=image_url,
                 published_at=pub_at,
                 language="en",
             )

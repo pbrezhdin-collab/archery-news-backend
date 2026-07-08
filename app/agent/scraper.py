@@ -1,4 +1,5 @@
 # app/agent/scraper.py
+import re
 import httpx
 import trafilatura
 
@@ -10,10 +11,26 @@ HEADERS = {
     )
 }
 
-def fetch_article_text(url: str) -> str:
+_OG_IMAGE_RE = re.compile(
+    r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+_TWITTER_IMAGE_RE = re.compile(
+    r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
+
+
+def _extract_og_image(html: str) -> str:
+    """Достаёт og:image (или twitter:image как запасной вариант) из HTML страницы."""
+    match = _OG_IMAGE_RE.search(html) or _TWITTER_IMAGE_RE.search(html)
+    return match.group(1).strip() if match else ""
+
+
+def fetch_article_text_and_image(url: str) -> tuple[str, str]:
     """
-    Открывает страницу новости и возвращает чистый текст статьи.
-    Возвращает пустую строку, если не удалось.
+    Открывает страницу новости один раз и возвращает (текст_статьи, og_image_url).
+    Оба значения — пустые строки, если не удалось получить.
     """
     try:
         with httpx.Client(timeout=20, headers=HEADERS, follow_redirects=True) as client:
@@ -22,13 +39,19 @@ def fetch_article_text(url: str) -> str:
             html = resp.text
     except Exception as e:
         print(f"[scraper] Ошибка загрузки {url}: {e}")
-        return ""
+        return "", ""
 
-    # trafilatura извлекает основной текст статьи
     text = trafilatura.extract(
         html,
         include_comments=False,
         include_tables=False,
         favor_precision=True,
     )
-    return (text or "").strip()
+    image = _extract_og_image(html)
+    return (text or "").strip(), image
+
+
+def fetch_article_text(url: str) -> str:
+    """Оставлено для обратной совместимости — только текст, без картинки."""
+    text, _ = fetch_article_text_and_image(url)
+    return text
