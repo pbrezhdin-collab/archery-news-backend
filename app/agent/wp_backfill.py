@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.llm import translate_and_summarize
+from app.agent.urlnorm import normalize_url
 from app.models import Article
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -99,7 +100,7 @@ async def backfill_from_wordpress(
 
         for post in posts:
             stats["total"] += 1
-            source_url = post.get("link", "")
+            source_url = normalize_url(post.get("link", ""))
             if not source_url:
                 stats["errors"] += 1
                 continue

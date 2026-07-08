@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.collector import fetch_feed
 from app.agent.scraper import fetch_article_text_and_image
 from app.agent.llm import translate_and_summarize
+from app.agent.urlnorm import normalize_url
 from app.models import Article, Source
 
 
@@ -21,7 +22,7 @@ async def process_feed(session: AsyncSession, source_name: str, feed_url: str) -
     stats = {"total": len(items), "skipped": 0, "saved": 0, "errors": 0}
 
     for item in items:
-        source_url = item.get("source_url", "")
+        source_url = normalize_url(item.get("source_url", ""))
         if not source_url:
             stats["errors"] += 1
             continue
