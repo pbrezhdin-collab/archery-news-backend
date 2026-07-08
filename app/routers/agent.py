@@ -18,22 +18,8 @@ def _check_admin(x_admin_key: str | None):
 
 
 _DEDUPE_SQL = text(r"""
-    WITH normalized AS (
-      SELECT id,
-        regexp_replace(
-          regexp_replace(
-            regexp_replace(
-              regexp_replace(split_part(source_url, '?', 1), '^https?://', ''),
-            '^www\.', ''),
-          '/+$', ''),
-        '^([^/]+)/en/', '\1/') AS norm_url
-      FROM articles
-    )
-    DELETE FROM articles a
-    USING normalized n1, normalized n2
-    WHERE a.id = n1.id
-      AND n1.norm_url = n2.norm_url
-      AND n1.id > n2.id
+    DELETE FROM articles
+    WHERE source_url !~ '^https://(www\.)?worldarcheryamericas\.com/en/'
 """)
 
 
@@ -43,9 +29,10 @@ async def dedupe_articles(
     x_admin_key: str | None = Header(default=None),
 ):
     """
-    Разовая очистка дублей: одна и та же новость иногда сохранялась дважды
-    из-за разных вариантов ссылки (utm-параметры, www, конечный слэш).
-    Удаляет более поздние дубли, оставляя самую раннюю запись каждой группы.
+    Разовая очистка: удаляет уже сохранённые статьи с worldarcheryamericas.com,
+    у которых нет /en/ в пути — то есть те, что попали в базу как испанская
+    (или другая) языковая версия той же новости, до того как бэкафилл научился
+    их фильтровать. Затрагивает только этот источник.
     """
     _check_admin(x_admin_key)
     result = await db.execute(_DEDUPE_SQL)
@@ -91,7 +78,8 @@ async def trigger_backfill(
     async def _run():
         async with async_session() as session:
             await backfill_from_wordpress(
-                session, payload.source_name, payload.site_base, since_dt, until_dt
+                session, payload.source_name, payload.site_base, since_dt, until_dt,
+                lang=payload.lang, url_lang_prefix=payload.url_lang_prefix,
             )
 
     background_tasks.add_task(_run)
