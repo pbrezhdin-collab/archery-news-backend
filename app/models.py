@@ -41,6 +41,7 @@ class Source(Base):
     name: Mapped[str] = mapped_column(String(200))
     url: Mapped[str] = mapped_column(String(1000), unique=True)
     type: Mapped[str] = mapped_column(String(20), default="rss")  # rss / api / scrape
+    language: Mapped[str] = mapped_column(String(10), default="en")  # язык контента источника (en, es, fr, ...)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     

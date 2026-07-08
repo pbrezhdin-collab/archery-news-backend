@@ -64,3 +64,6 @@ class BackfillRequest(BaseModel):
     source_name: str        # напр. "World Archery Americas"
     since: str               # "2026-01-01"
     until: str | None = None  # необязательно, по умолчанию — до сегодня
+    lang: str = "en"          # код языка, который собираем (en, es, fr, ...)
+    url_lang_prefix: str | None = "en"  # префикс в URL для этого языка (напр. "en" для /en/slug)
+                                          # укажи None, если это язык по умолчанию сайта (без префикса)
