@@ -13,3 +13,4 @@ beautifulsoup4==4.12.3
 openai==1.57.4
 apscheduler==3.11.0
 pywebpush==2.0.0
+trafilatura
