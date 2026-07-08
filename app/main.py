@@ -5,7 +5,7 @@ from sqlalchemy import text, select
 from app.database import engine, Base, async_session
 from app.config import settings
 from app.models import Source
-from app.routers import articles, push, categories, agent
+from app.routers import articles, push, categories, agent, image_proxy
 from app.scheduler import start_scheduler, scheduler
 
 
@@ -50,6 +50,7 @@ app.include_router(articles.router)
 app.include_router(push.router)
 app.include_router(categories.router)
 app.include_router(agent.router)
+app.include_router(image_proxy.router)
 
 @app.get("/")
 async def root():
