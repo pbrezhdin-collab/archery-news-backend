@@ -1,7 +1,7 @@
 # app/agent/scraper.py
-import re
 import httpx
 import trafilatura
+from bs4 import BeautifulSoup
 
 HEADERS = {
     "User-Agent": (
@@ -11,20 +11,22 @@ HEADERS = {
     )
 }
 
-_OG_IMAGE_RE = re.compile(
-    r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
-    re.IGNORECASE,
-)
-_TWITTER_IMAGE_RE = re.compile(
-    r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
-    re.IGNORECASE,
-)
-
 
 def _extract_og_image(html: str) -> str:
-    """Достаёт og:image (или twitter:image как запасной вариант) из HTML страницы."""
-    match = _OG_IMAGE_RE.search(html) or _TWITTER_IMAGE_RE.search(html)
-    return match.group(1).strip() if match else ""
+    """
+    Достаёт og:image (или twitter:image как запасной вариант) из HTML страницы.
+    Через BeautifulSoup — не зависит от порядка атрибутов в теге <meta>,
+    в отличие от regex-подхода (который как раз и не сработал изначально).
+    """
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        tag = soup.find("meta", attrs={"property": "og:image"}) \
+            or soup.find("meta", attrs={"name": "twitter:image"})
+        if tag and tag.get("content"):
+            return tag["content"].strip()
+    except Exception as e:
+        print(f"[scraper] Ошибка парсинга og:image: {e}")
+    return ""
 
 
 def fetch_article_text_and_image(url: str) -> tuple[str, str]:
