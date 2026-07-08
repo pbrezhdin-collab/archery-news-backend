@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, async_session
@@ -14,6 +15,40 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 def _check_admin(x_admin_key: str | None):
     if settings.ADMIN_API_KEY and x_admin_key != settings.ADMIN_API_KEY:
         raise HTTPException(403, "Forbidden")
+
+
+_DEDUPE_SQL = text(r"""
+    WITH normalized AS (
+      SELECT id,
+        regexp_replace(
+          regexp_replace(
+            regexp_replace(split_part(source_url, '?', 1), '^https?://', ''),
+          '^www\.', ''),
+        '/+$', '') AS norm_url
+      FROM articles
+    )
+    DELETE FROM articles a
+    USING normalized n1, normalized n2
+    WHERE a.id = n1.id
+      AND n1.norm_url = n2.norm_url
+      AND n1.id > n2.id
+""")
+
+
+@router.post("/dedupe")
+async def dedupe_articles(
+    db: AsyncSession = Depends(get_db),
+    x_admin_key: str | None = Header(default=None),
+):
+    """
+    Разовая очистка дублей: одна и та же новость иногда сохранялась дважды
+    из-за разных вариантов ссылки (utm-параметры, www, конечный слэш).
+    Удаляет более поздние дубли, оставляя самую раннюю запись каждой группы.
+    """
+    _check_admin(x_admin_key)
+    result = await db.execute(_DEDUPE_SQL)
+    await db.commit()
+    return {"deleted": result.rowcount}
 
 
 @router.post("/run", response_model=AgentRunResult)
