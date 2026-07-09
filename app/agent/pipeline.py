@@ -7,6 +7,7 @@ from app.agent.scraper import fetch_article_text_and_image
 from app.agent.llm import translate_and_summarize
 from app.agent.urlnorm import normalize_url
 from app.agent.youtube_pipeline import process_youtube_channel
+from app.agent.archery_ru_pipeline import process_archery_ru
 from app.models import Article, Source
 
 
@@ -93,6 +94,9 @@ async def run_agent(session: AsyncSession) -> dict:
             # Для type="youtube" в поле url хранится Channel ID канала (не ссылка!),
             # напр. "UCxxxxxxxxxxxxxxxxxxxxxx".
             stats = await process_youtube_channel(session, src.name, src.url, language=src.language)
+        elif src.type == "archery_ru":
+            # Специализированный скрейпер под конкретно archery.ru (нет RSS у сайта).
+            stats = await process_archery_ru(session, src.name)
         else:
             continue  # api / scrape — добавим позже (см. v1.1 в ТЗ)
         for key in totals:
