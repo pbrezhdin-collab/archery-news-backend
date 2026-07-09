@@ -64,3 +64,22 @@ class ArticleTranslation(Base):
     summary_detailed: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
+
+
+class AnalyticsEvent(Base):
+    """
+    Простая приватная аналитика без cookies — не требует баннера согласия,
+    т.к. ничего персонального не хранит (нет IP, нет постоянного идентификатора
+    посетителя). Считает события: просмотры страниц и открытия конкретных новостей.
+    """
+    __tablename__ = "analytics_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(30), index=True)  # "page_view" | "article_view"
+    path: Mapped[str] = mapped_column(String(500), default="")
+    article_id: Mapped[int | None] = mapped_column(
+        ForeignKey("articles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    referrer: Mapped[str] = mapped_column(String(500), default="")
+    language: Mapped[str] = mapped_column(String(10), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

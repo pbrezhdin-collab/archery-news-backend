@@ -92,3 +92,27 @@ class BackfillRequest(BaseModel):
     lang: str = "en"          # код языка, который собираем (en, es, fr, ...)
     url_lang_prefix: str | None = "en"  # префикс в URL для этого языка (напр. "en" для /en/slug)
                                           # укажи None, если это язык по умолчанию сайта (без префикса)
+
+
+class AnalyticsEventIn(BaseModel):
+    event_type: str          # "page_view" | "article_view"
+    path: str = ""
+    article_id: int | None = None
+    referrer: str = ""
+    language: str = ""
+
+
+class TopArticleStat(BaseModel):
+    article_id: int
+    title: str
+    views: int
+
+
+class AnalyticsSummary(BaseModel):
+    period_days: int
+    page_views: int
+    article_views: int
+    top_articles: list[TopArticleStat]
+    by_category: dict[str, int]
+    by_language: dict[str, int]
+    by_day: dict[str, int]
