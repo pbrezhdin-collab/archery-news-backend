@@ -15,3 +15,4 @@ apscheduler==3.11.0
 pywebpush==2.0.0
 trafilatura
 tzdata
+youtube-transcript-api==0.6.3
