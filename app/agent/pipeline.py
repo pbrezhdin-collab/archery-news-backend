@@ -6,6 +6,7 @@ from app.agent.collector import fetch_feed
 from app.agent.scraper import fetch_article_text_and_image
 from app.agent.llm import translate_and_summarize
 from app.agent.urlnorm import normalize_url
+from app.agent.youtube_pipeline import process_youtube_channel
 from app.models import Article, Source
 
 
@@ -86,9 +87,14 @@ async def run_agent(session: AsyncSession) -> dict:
 
     totals = {"total": 0, "saved": 0, "skipped": 0, "errors": 0}
     for src in sources:
-        if src.type != "rss":
+        if src.type == "rss":
+            stats = await process_feed(session, src.name, src.url, source_language=src.language)
+        elif src.type == "youtube":
+            # Для type="youtube" в поле url хранится Channel ID канала (не ссылка!),
+            # напр. "UCxxxxxxxxxxxxxxxxxxxxxx".
+            stats = await process_youtube_channel(session, src.name, src.url, language=src.language)
+        else:
             continue  # api / scrape — добавим позже (см. v1.1 в ТЗ)
-        stats = await process_feed(session, src.name, src.url, source_language=src.language)
         for key in totals:
             totals[key] += stats[key]
     return totals
