@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     def frontend_origins(self) -> list[str]:
         return [o.strip() for o in self.FRONTEND_ORIGIN.split(",") if o.strip()]
 
+    @property
+    def primary_frontend_origin(self) -> str:
+        """Первый адрес из списка — используется для ссылок в og:url и редиректе на /share/."""
+        origins = self.frontend_origins
+        return origins[0] if origins else "https://archerynews.ru"
+
     # VAPID для push (создадим в Части 4)
     VAPID_PUBLIC_KEY: str = ""
     VAPID_PRIVATE_KEY: str = ""
