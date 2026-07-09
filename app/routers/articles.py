@@ -4,8 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Article
 from app.schemas import ArticleOut, ArticlesResponse
+from app.agent.translation_cache import get_translated_content, get_translated_batch
 
 router = APIRouter(prefix="/api/articles", tags=["articles"])
+
+
+def _normalize_lang(lang: str | None) -> str:
+    """'fr-FR' -> 'fr', пусто -> 'ru'. LLM сама справится почти с любым кодом,
+    так что здесь только приведение формата, без ограничения списком."""
+    if not lang:
+        return "ru"
+    return lang.strip().lower().split("-")[0][:5] or "ru"
 
 
 @router.get("", response_model=ArticlesResponse)
@@ -14,8 +23,13 @@ async def get_articles(
     search: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    lang: str | None = Query(None, description="Язык браузера посетителя, напр. 'fr'"),
     db: AsyncSession = Depends(get_db),
 ):
+    lang = _normalize_lang(lang)
+
+    # Категория и поиск фильтруются по каноническим (русским) значениям в БД —
+    # локализация категорий происходит только на фронтенде, для отображения.
     conditions = []
     if category and category != "all":
         conditions.append(Article.category == category)
@@ -34,7 +48,10 @@ async def get_articles(
     offset = (page - 1) * page_size
     query = base_query.order_by(desc(Article.published_at)).limit(page_size).offset(offset)
     result = await db.execute(query)
-    items = result.scalars().all()
+    articles = result.scalars().all()
+
+    translations = await get_translated_batch(db, articles, lang)
+    items = [ArticleOut.build(a, translations[a.id]) for a in articles]
 
     has_more = offset + len(items) < total
 
@@ -48,9 +65,16 @@ async def get_articles(
 
 
 @router.get("/{article_id}", response_model=ArticleOut)
-async def get_article(article_id: int, db: AsyncSession = Depends(get_db)):
+async def get_article(
+    article_id: int,
+    lang: str | None = Query(None, description="Язык браузера посетителя, напр. 'fr'"),
+    db: AsyncSession = Depends(get_db),
+):
+    lang = _normalize_lang(lang)
     result = await db.execute(select(Article).where(Article.id == article_id))
     article = result.scalar_one_or_none()
     if not article:
         raise HTTPException(404, "Статья не найдена")
-    return article
+
+    translated = await get_translated_content(db, article, lang)
+    return ArticleOut.build(article, translated)

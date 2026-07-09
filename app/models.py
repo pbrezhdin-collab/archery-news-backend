@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, Integer, Boolean 
+from sqlalchemy import String, Text, DateTime, Integer, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 from app.database import Base
@@ -43,5 +43,24 @@ class Source(Base):
     type: Mapped[str] = mapped_column(String(20), default="rss")  # rss / api / scrape
     language: Mapped[str] = mapped_column(String(10), default="en")  # язык контента источника (en, es, fr, ...)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ArticleTranslation(Base):
+    """
+    Кэш переводов новости на языки браузеров посетителей (интернационализация).
+    Канонический язык хранения — русский (в самой Article). Сюда пишутся
+    переводы "по требованию": первый посетитель с конкретным языком браузера
+    вызывает перевод через LLM, дальше он берётся отсюда бесплатно и мгновенно.
+    """
+    __tablename__ = "article_translations"
+    __table_args__ = (UniqueConstraint("article_id", "language", name="uq_article_translation_lang"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    article_id: Mapped[int] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"), index=True)
+    language: Mapped[str] = mapped_column(String(10), index=True)
+    title: Mapped[str] = mapped_column(Text)
+    summary: Mapped[str] = mapped_column(Text)
+    summary_detailed: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     

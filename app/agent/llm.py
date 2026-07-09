@@ -89,3 +89,54 @@ def translate_and_summarize(title: str, summary: str, content: str, fallback_lan
             "title_ru": "", "summary_ru": "", "summary_detailed_ru": "",
             "category": "Общее", "source_language": fallback_language,
         }
+
+
+_UI_TRANSLATE_PROMPT = """Ты профессиональный переводчик новостей о стрельбе из лука.
+Тебе дают заголовок, краткое резюме и развёрнутое резюме новости на русском языке.
+Переведи все три текста на язык с кодом "{lang}", сохраняя смысл, тон и структуру
+(это не пересказ, а точный перевод уже готового русского текста).
+
+Верни СТРОГО валидный JSON без markdown-обёртки:
+{{
+  "title": "переведённый заголовок",
+  "summary": "переведённое краткое резюме",
+  "summary_detailed": "переведённое развёрнутое резюме"
+}}
+
+Имена спортсменов и топонимы передавай в общепринятом для языка "{lang}" написании
+(не транслитерацию с русского, а нормальную форму на целевом языке, как её обычно пишут
+в новостях на этом языке)."""
+
+
+def translate_ui_content(title: str, summary: str, summary_detailed: str, lang: str) -> dict:
+    """
+    Переводит уже готовый русский текст новости (title/summary/summary_detailed)
+    на язык браузера посетителя (интернационализация). Используется отдельно от
+    translate_and_summarize — тут вход всегда на русском, а не на языке источника.
+    """
+    user_content = (
+        f"ЗАГОЛОВОК:\n{title}\n\n"
+        f"КРАТКОЕ РЕЗЮМЕ:\n{summary}\n\n"
+        f"РАЗВЁРНУТОЕ РЕЗЮМЕ:\n{summary_detailed}"
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": _UI_TRANSLATE_PROMPT.format(lang=lang)},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        data = json.loads(resp.choices[0].message.content)
+        return {
+            "title": data.get("title", "").strip() or title,
+            "summary": data.get("summary", "").strip() or summary,
+            "summary_detailed": data.get("summary_detailed", "").strip() or summary_detailed,
+        }
+    except Exception as e:
+        print(f"[llm] Ошибка перевода интерфейса на '{lang}': {e}")
+        # Не оставляем пользователя без контента — откатываемся на русский текст.
+        return {"title": title, "summary": summary, "summary_detailed": summary_detailed}
