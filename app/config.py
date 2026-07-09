@@ -9,8 +9,13 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str = ""
 
-    # CORS — адрес фронтенда
+    # CORS — адреса фронтенда. Можно указать несколько через запятую,
+    # например: "https://archery.news,https://www.archery.news,https://archerynews.ru"
     FRONTEND_ORIGIN: str = "https://archerynews.ru"
+
+    @property
+    def frontend_origins(self) -> list[str]:
+        return [o.strip() for o in self.FRONTEND_ORIGIN.split(",") if o.strip()]
 
     # VAPID для push (создадим в Части 4)
     VAPID_PUBLIC_KEY: str = ""
