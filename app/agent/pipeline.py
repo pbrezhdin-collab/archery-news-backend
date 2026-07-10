@@ -9,6 +9,7 @@ from app.agent.urlnorm import normalize_url
 from app.agent.youtube_pipeline import process_youtube_channel
 from app.agent.archery_ru_pipeline import process_archery_ru
 from app.models import Article, Source
+from app.push_send import send_push_to_all
 
 
 async def _article_exists(session: AsyncSession, source_url: str) -> bool:
@@ -101,4 +102,20 @@ async def run_agent(session: AsyncSession) -> dict:
             continue  # api / scrape — добавим позже (см. v1.1 в ТЗ)
         for key in totals:
             totals[key] += stats[key]
+
+    # Реальная отправка push (не только сохранение подписки) — только если
+    # реально появилось что-то новое, чтобы не заваливать пользователей
+    # пустыми уведомлениями "ничего нового".
+    if totals["saved"] > 0:
+        try:
+            await send_push_to_all(
+                session,
+                title="Archery News",
+                body=f"Новых новостей: {totals['saved']}",
+                url="/",
+                badge_count=totals["saved"],
+            )
+        except Exception as e:
+            print(f"[push] Ошибка рассылки: {e}")
+
     return totals
