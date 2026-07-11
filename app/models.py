@@ -82,4 +82,26 @@ class AnalyticsEvent(Base):
     )
     referrer: Mapped[str] = mapped_column(String(500), default="")
     language: Mapped[str] = mapped_column(String(10), default="")
+    # Приватный хэш посетителя: sha256(IP + User-Agent + сегодняшняя дата + соль).
+    # Сам IP нигде не хранится — только необратимый хэш, который автоматически
+    # "обнуляется" каждый день (дата — часть входных данных для хэша), поэтому
+    # отследить одного и того же человека дольше суток невозможно. Нужен только
+    # для честного подсчёта уникальных посетителей, не для идентификации кого-либо.
+    visitor_hash: Mapped[str] = mapped_column(String(64), default="", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AgentRunLog(Base):
+    """
+    Журнал запусков агента сбора новостей — и по расписанию (раз в час),
+    и ручных через /api/agent/run. Нужен, чтобы можно было просто спросить
+    API "когда последний раз реально запускался сбор", не копаясь в логах Railway.
+    """
+    __tablename__ = "agent_run_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ran_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    saved: Mapped[int] = mapped_column(Integer, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, default=0)
+    errors: Mapped[int] = mapped_column(Integer, default=0)

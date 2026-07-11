@@ -32,4 +32,9 @@ class Settings(BaseSettings):
     # Если оставить пустым — эндпоинт не защищён (не рекомендуется в проде).
     ADMIN_API_KEY: str = ""
 
+    # "Соль" для хэша уникальных посетителей в аналитике (app/routers/analytics.py).
+    # Не обязателен для приватности как таковой (дата в хэше и так всё "обнуляет"
+    # каждые сутки), но усложняет подбор конкретной пары IP+User-Agent при желании.
+    ANALYTICS_SALT: str = "archery-news-default-salt-change-me"
+
 settings = Settings()

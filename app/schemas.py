@@ -112,6 +112,7 @@ class AnalyticsSummary(BaseModel):
     period_days: int
     page_views: int
     article_views: int
+    unique_visitors: int
     top_articles: list[TopArticleStat]
     by_category: dict[str, int]
     by_language: dict[str, int]
