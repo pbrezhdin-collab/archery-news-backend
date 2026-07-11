@@ -1,7 +1,8 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,11 +16,34 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 _VALID_EVENT_TYPES = {"page_view", "article_view"}
 
 
-@router.post("/event", status_code=204)
-async def log_event(payload: AnalyticsEventIn, db: AsyncSession = Depends(get_db)):
+def _client_ip(request: Request) -> str:
+    """Railway стоит за прокси — реальный IP посетителя в X-Forwarded-For."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
+
+def _visitor_hash(request: Request) -> str:
     """
-    Приватная аналитика без cookies: ничего персонального не пишем (нет IP,
-    нет постоянного идентификатора посетителя) — просто считаем события.
+    Приватный, необратимый и ЕЖЕДНЕВНО меняющийся хэш посетителя.
+    Дата — часть входных данных, поэтому хэш одного и того же человека
+    завтра будет уже другим: отследить кого-либо дольше суток невозможно,
+    а исходный IP нигде не сохраняется, только этот хэш.
+    """
+    ip = _client_ip(request)
+    ua = request.headers.get("user-agent", "")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    raw = f"{ip}|{ua}|{today}|{settings.ANALYTICS_SALT}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+@router.post("/event", status_code=204)
+async def log_event(payload: AnalyticsEventIn, request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Приватная аналитика без cookies: сырой IP нигде не сохраняется — только
+    его необратимый ежедневно меняющийся хэш (см. _visitor_hash), нужный
+    исключительно для честного подсчёта УНИКАЛЬНЫХ посетителей.
     Отдаёт 204 всегда, даже при некорректном типе события — аналитика
     не должна ничего ломать на фронте, даже если что-то пришло не так.
     """
@@ -32,6 +56,7 @@ async def log_event(payload: AnalyticsEventIn, db: AsyncSession = Depends(get_db
         article_id=payload.article_id,
         referrer=payload.referrer[:500],
         language=payload.language[:10],
+        visitor_hash=_visitor_hash(request),
     )
     db.add(event)
     await db.commit()
@@ -57,6 +82,18 @@ async def get_summary(
     article_views = (await db.execute(
         select(func.count()).select_from(AnalyticsEvent)
         .where(AnalyticsEvent.event_type == "article_view", AnalyticsEvent.created_at >= since)
+    )).scalar_one()
+
+    # Уникальные посетители — считаем по количеству РАЗНЫХ ежедневных хэшей.
+    # Важная оговорка: хэш меняется каждые сутки, поэтому один и тот же
+    # человек, заходивший 3 дня подряд, даст 3 разных хэша — это "визиты",
+    # а не "уникальные люди за весь период" в строгом смысле. Для дневной/
+    # недельной картины активности этого более чем достаточно, и это
+    # стандартный компромисс приватной аналитики без cookies (так же
+    # считают Plausible/Fathom).
+    unique_visitors = (await db.execute(
+        select(func.count(func.distinct(AnalyticsEvent.visitor_hash)))
+        .where(AnalyticsEvent.created_at >= since, AnalyticsEvent.visitor_hash != "")
     )).scalar_one()
 
     # Топ-10 новостей по просмотрам
@@ -101,6 +138,7 @@ async def get_summary(
         period_days=days,
         page_views=page_views,
         article_views=article_views,
+        unique_visitors=unique_visitors,
         top_articles=top_articles,
         by_category=by_category,
         by_language=by_language,
